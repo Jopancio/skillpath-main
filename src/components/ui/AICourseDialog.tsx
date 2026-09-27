@@ -166,23 +166,53 @@ function DialogInner({
       4000
     );
     try {
-      const res = await fetch("/api/generate-course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          skill: s,
-          profile,
-          locale,
-          ...(pdf
-            ? { pdf: { name: pdf.name, size: pdf.size, data: pdf.dataUrl } }
-            : {}),
-        }),
+      // Generation runs as several short requests (outline → chapter batches
+      // → finish) so no single request hits Vercel's time limit.
+      const post = async (payload: Record<string, unknown>) => {
+        // Retry a step on rate-limit / transient AI failure, with backoff.
+        for (let attempt = 0; ; attempt++) {
+          const res = await fetch("/api/generate-course", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skill: s, profile, locale, ...payload }),
+          });
+          if (res.ok) return (await res.json()) as Record<string, unknown>;
+          const retryable = res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504;
+          // "rate_limited" is OUR per-instance limit on starting courses — not worth waiting on.
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          if (!retryable || data.error === "rate_limited" || attempt >= 2) {
+            throw new Error(`status ${res.status} ${data.error ?? ""}`);
+          }
+          await new Promise((r) => setTimeout(r, res.status === 429 ? 15_000 : 4_000));
+        }
+      };
+
+      const first = await post({
+        step: "outline",
+        ...(pdf ? { pdf: { name: pdf.name, size: pdf.size, data: pdf.dataUrl } } : {}),
       });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = (await res.json()) as { course?: Course };
-      if (!data.course) throw new Error("no course");
-      onCreated(data.course);
-    } catch {
+      const outline = first.outline as { modules: unknown[] } | undefined;
+      if (!outline || !Array.isArray(outline.modules)) throw new Error("no outline");
+      const common = {
+        skill: typeof first.skill === "string" ? first.skill : s,
+        outline,
+        pdf: first.pdf ?? undefined,
+      };
+
+      const CHAPTERS_PER_STEP = 4;
+      const drafts: unknown[] = [];
+      for (let start = 0; start < outline.modules.length; start += CHAPTERS_PER_STEP) {
+        const part = await post({ ...common, step: "chapters", start, count: CHAPTERS_PER_STEP });
+        if (!Array.isArray(part.modules)) throw new Error("no modules");
+        drafts.push(...part.modules);
+      }
+
+      const done = await post({ ...common, step: "finish", drafts });
+      const course = done.course as Course | undefined;
+      if (!course) throw new Error("no course");
+      onCreated(course);
+    } catch (e) {
+      console.warn("[ai-course] generation failed:", e);
       setError(ob.aiError);
     } finally {
       window.clearInterval(stepTimer);
