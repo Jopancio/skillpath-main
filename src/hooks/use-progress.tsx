@@ -16,7 +16,10 @@ import {
   persistUserData,
   supabase,
   upsertLeaderboardEntry,
+  upsertPublicProfile,
 } from "@/lib/supabase";
+import { computeBadgeStats, qualifyingBadgeIds, type BadgeStats } from "@/lib/badge-engine";
+import { MAX_FEATURED_BADGES } from "@/data/badges";
 
 const BASE_STORAGE_KEY = "skillpath-progress-v1";
 
@@ -78,6 +81,16 @@ interface PersistedState {
   onboarded: boolean;
   onboarding: OnboardingData | null;
   placement: PlacementResult | null;
+  /** Short public bio shown on /profile/[id]. */
+  bio?: string;
+  /** Badge ids pinned to the top of the public profile (max 3). */
+  featuredBadges?: string[];
+  /** Badge id → YYYY-MM-DD first unlocked. Earning is permanent. */
+  badgeUnlocks?: Record<string, string>;
+  /** Questions sent to the course AI assistant (Top AI Ask board). */
+  aiAsks?: number;
+  /** AI-generated courses this learner created (Top Course Creator board). */
+  coursesCreated?: number;
 }
 
 const initialState: PersistedState = {
@@ -91,6 +104,11 @@ const initialState: PersistedState = {
   onboarded: false,
   onboarding: null,
   placement: null,
+  bio: "",
+  featuredBadges: [],
+  badgeUnlocks: {},
+  aiAsks: 0,
+  coursesCreated: 0,
 };
 
 interface ProgressContextValue {
@@ -123,6 +141,23 @@ interface ProgressContextValue {
   setPlacement: (result: PlacementResult) => void;
   setDailyGoal: (minutes: number) => void;
   resetAll: () => void;
+  bio: string;
+  setBio: (bio: string) => void;
+  featuredBadges: string[];
+  setFeaturedBadges: (ids: string[]) => void;
+  badgeUnlocks: Record<string, string>;
+  badgeStats: BadgeStats;
+  /** Badges unlocked during this visit, oldest first — drives the unlock toast. */
+  recentUnlocks: string[];
+  dismissUnlock: (id: string) => void;
+  aiAsks: number;
+  coursesCreated: number;
+  /** Count one question sent to the course AI assistant. */
+  recordAiAsk: () => void;
+  /** Count one AI-generated course the learner created. */
+  recordCourseCreated: () => void;
+  /** Raise the created-courses counter to at least `min` (backfill). */
+  ensureCoursesCreatedAtLeast: (min: number) => void;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -164,6 +199,11 @@ function ProgressInner({
       onboarding: raw.onboarding ?? null,
       placement: raw.placement ?? null,
       moduleQuizResults: raw.moduleQuizResults ?? {},
+      bio: raw.bio ?? "",
+      featuredBadges: raw.featuredBadges ?? [],
+      badgeUnlocks: raw.badgeUnlocks ?? {},
+      aiAsks: raw.aiAsks ?? 0,
+      coursesCreated: raw.coursesCreated ?? 0,
     };
     // Streak continuity check
     const today = todayKey();
@@ -211,6 +251,44 @@ function ProgressInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable per remount
   }, []);
 
+  // ── Badge system ─────────────────────────────────────────────
+  const badgeStats = useMemo(
+    () =>
+      computeBadgeStats({
+        xp: state.xp,
+        streak: state.streak,
+        completedLessons: state.completedLessons,
+        quizResults: state.quizResults,
+        moduleQuizResults: state.moduleQuizResults,
+      }),
+    [state.xp, state.streak, state.completedLessons, state.quizResults, state.moduleQuizResults]
+  );
+  const [recentUnlocks, setRecentUnlocks] = useState<string[]>([]);
+  // The first sync after load is silent: whatever already qualifies then was
+  // earned earlier (or on another device) and must not flood the toast.
+  const badgeSyncPrimed = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const unlocks = state.badgeUnlocks ?? {};
+    const fresh = qualifyingBadgeIds(badgeStats).filter((id) => !(id in unlocks));
+    const announce = badgeSyncPrimed.current;
+    badgeSyncPrimed.current = true;
+    if (fresh.length === 0) return;
+    const today = todayKey();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derived unlock bookkeeping
+    setState((s) => {
+      const next = { ...(s.badgeUnlocks ?? {}) };
+      for (const id of fresh) if (!(id in next)) next[id] = today;
+      return { ...s, badgeUnlocks: next };
+    });
+    if (announce) setRecentUnlocks((q) => [...q, ...fresh.filter((id) => !q.includes(id))]);
+  }, [hydrated, badgeStats, state.badgeUnlocks]);
+
+  const dismissUnlock = useCallback((id: string) => {
+    setRecentUnlocks((q) => q.filter((x) => x !== id));
+  }, []);
+
   // Debounced persist
   useEffect(() => {
     if (!hydrated || !storageKey) return;
@@ -222,15 +300,38 @@ function ProgressInner({
         // Remote persistence still works when local storage is unavailable.
       }
       if (userId && supabase) {
+        const displayName = state.userName || user?.name || "Anonim";
         void persistUserData("progress", userId, state, getToken);
         // Publish the stats that power the dashboard leaderboard.
         void upsertLeaderboardEntry(
           userId,
           {
-            displayName: state.userName || user?.name || "Anonim",
+            displayName,
             xp: state.xp,
             streak: state.streak,
             lessonsDone: state.completedLessons.length,
+            coursesCreated: state.coursesCreated ?? 0,
+            aiAsks: state.aiAsks ?? 0,
+            quizzesPassed: badgeStats.certificates + badgeStats.chapterQuizzes,
+            certificates: badgeStats.certificates,
+            badgesCount: Object.keys(state.badgeUnlocks ?? {}).length,
+          },
+          getToken
+        );
+        // Publish the public profile other learners see at /profile/[id].
+        void upsertPublicProfile(
+          userId,
+          {
+            display_name: displayName,
+            bio: state.bio ?? "",
+            avatar_url: user?.avatarUrl ?? null,
+            xp: state.xp,
+            streak: state.streak,
+            lessons_done: badgeStats.lessons,
+            courses_completed: badgeStats.coursesCompleted,
+            certificates: badgeStats.certificates,
+            badges: state.badgeUnlocks ?? {},
+            featured_badges: state.featuredBadges ?? [],
           },
           getToken
         );
@@ -239,7 +340,7 @@ function ProgressInner({
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [state, hydrated, storageKey, userId, user, getToken]);
+  }, [state, hydrated, storageKey, userId, user, getToken, badgeStats]);
 
   const touchStreak = useCallback((s: PersistedState): PersistedState => {
     const today = todayKey();
@@ -293,6 +394,19 @@ function ProgressInner({
 
   const setUserName = useCallback((name: string) => {
     setState((s) => ({ ...s, userName: name }));
+  }, []);
+
+  const setBio = useCallback((bio: string) => {
+    setState((s) => ({ ...s, bio: bio.slice(0, 160) }));
+  }, []);
+
+  // Only earned badges can be pinned; unknown/locked ids are dropped.
+  const setFeaturedBadges = useCallback((ids: string[]) => {
+    setState((s) => {
+      const unlocks = s.badgeUnlocks ?? {};
+      const clean = [...new Set(ids)].filter((id) => id in unlocks).slice(0, MAX_FEATURED_BADGES);
+      return { ...s, featuredBadges: clean };
+    });
   }, []);
 
   // Chapter quizzes live in their own record so badges/certificates that read
@@ -352,6 +466,19 @@ function ProgressInner({
     [touchStreak, hydrated, userId]
   );
 
+  const recordAiAsk = useCallback(() => {
+    setState((s) => ({ ...s, aiAsks: (s.aiAsks ?? 0) + 1 }));
+  }, []);
+
+  const recordCourseCreated = useCallback(() => {
+    setState((s) => ({ ...s, coursesCreated: (s.coursesCreated ?? 0) + 1 }));
+  }, []);
+
+  // Backfill for courses created before the counter existed.
+  const ensureCoursesCreatedAtLeast = useCallback((min: number) => {
+    setState((s) => ((s.coursesCreated ?? 0) >= min ? s : { ...s, coursesCreated: min }));
+  }, []);
+
   const setPlacement = useCallback((result: PlacementResult) => {
     setState((s) => ({ ...s, placement: result }));
   }, []);
@@ -400,8 +527,21 @@ function ProgressInner({
       setPlacement,
       setDailyGoal,
       resetAll,
+      bio: state.bio ?? "",
+      setBio,
+      featuredBadges: state.featuredBadges ?? [],
+      setFeaturedBadges,
+      badgeUnlocks: state.badgeUnlocks ?? {},
+      badgeStats,
+      recentUnlocks,
+      dismissUnlock,
+      aiAsks: state.aiAsks ?? 0,
+      coursesCreated: state.coursesCreated ?? 0,
+      recordAiAsk,
+      recordCourseCreated,
+      ensureCoursesCreatedAtLeast,
     }),
-    [state, lessonsCompletedCount, hydrated, completeLesson, recordQuiz, recordModuleQuiz, setUserName, completeOnboarding, setPlacement, setDailyGoal, resetAll, level, current, needed, percent]
+    [state, lessonsCompletedCount, hydrated, completeLesson, recordQuiz, recordModuleQuiz, setUserName, completeOnboarding, setPlacement, setDailyGoal, resetAll, level, current, needed, percent, setBio, setFeaturedBadges, badgeStats, recentUnlocks, dismissUnlock, recordAiAsk, recordCourseCreated, ensureCoursesCreatedAtLeast]
   );
 
   if (hydrationFailed) {

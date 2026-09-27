@@ -33,6 +33,7 @@ export const en: Dict = {
     faq: "FAQ",
     courses: "Kursus",
     dashboard: "Dasboard",
+    leaderboard: "Leaderboard",
     certificate: "Certificate",
     profile: "Profile",
     settings: "Settings",

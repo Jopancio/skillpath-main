@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useProgress } from "@/hooks/use-progress";
 import {
@@ -55,18 +55,39 @@ export function useLeaderboard(): {
   const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
+  // getToken is a function: including it in the fetch effect's deps would
+  // restart the fetch whenever its identity changed. Held in a ref so the
+  // effect below depends on nothing but the account id.
+  const getTokenRef = useRef(getToken);
   useEffect(() => {
-    if (!user) return;
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  const userId = user?.id ?? null;
+
+  useEffect(() => {
+    if (!userId) return;
 
     let cancelled = false;
 
     const load = async () => {
-      const data = await fetchTopLeaderboard(10, getToken);
-      if (cancelled) return;
-      // null result means no Supabase configured (localStorage-only mode);
-      // fall back to showing just the signed-in learner.
-      setRows(data ?? []);
-      setHydrated(true);
+      try {
+        const data = await fetchTopLeaderboard(10, () => getTokenRef.current());
+        // null result means no Supabase configured (localStorage-only mode);
+        // fall back to showing just the signed-in learner.
+        if (!cancelled) setRows(data ?? []);
+      } catch (err) {
+        // A failed fetch must NOT leave the board loading forever — the
+        // learner's own row needs no network at all. Keep whatever rows we
+        // already had and let the poller retry.
+        console.warn("[leaderboard] load failed:", err);
+        if (!cancelled) setRows((prev) => prev ?? []);
+      } finally {
+        // Always settle. Previously this sat after the await inside the happy
+        // path, so any throw — or any effect restart that landed mid-flight —
+        // left `hydrated` false and the dashboard stuck on its skeleton.
+        if (!cancelled) setHydrated(true);
+      }
     };
 
     void load();
@@ -76,7 +97,9 @@ export function useLeaderboard(): {
       cancelled = true;
       clearInterval(poller);
     };
-  }, [user, getToken]);
+    // Keyed on the account id only — a stable string. Depending on the user
+    // OBJECT tore this down and restarted it on every Clerk user refresh.
+  }, [userId]);
 
   return useMemo(() => {
     if (!user || !hydrated) return { entries: [], hydrated: false };

@@ -11,6 +11,14 @@ import { readOnboardingDraft } from "@/lib/onboarding-draft";
 const PUBLIC_ROUTES = ["/login", "/", "/about", "/sso-callback", "/onboarding"];
 
 /**
+ * Routes a guest may OPEN in read-only preview mode. Signed-in users still go
+ * through the normal onboarding/hydration gate below; guests just see the page,
+ * which is responsible for greying out anything interactive (see useIsGuest).
+ * Keep in sync with the /courses exemption in `src/proxy.ts`.
+ */
+const GUEST_PREVIEW_ROUTES = ["/courses"];
+
+/**
  * Gate placed around the app content. Unauthenticated users can browse
  * the landing page, the about page, and the questionnaire. Server-side page
  * and API checks enforce authentication; this gate handles onboarding
@@ -30,7 +38,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded) return;
-    if (!user && !PUBLIC_ROUTES.includes(pathname)) {
+    if (!user && !PUBLIC_ROUTES.includes(pathname) && !GUEST_PREVIEW_ROUTES.includes(pathname)) {
       router.replace("/login");
       return;
     }
@@ -62,7 +70,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   // render once auth is loaded and a user is signed in.
   if (PUBLIC_ROUTES.includes(pathname)) return <>{children}</>;
   if (!isLoaded) return null;
-  if (!user) return null;
+  if (!user) return GUEST_PREVIEW_ROUTES.includes(pathname) ? <>{children}</> : null;
   if (!hydrated || !coursesHydrated || !onboarded) return null;
 
   return <>{children}</>;

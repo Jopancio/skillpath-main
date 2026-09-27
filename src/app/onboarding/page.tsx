@@ -58,7 +58,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { t, locale } = useI18n();
   const { user, isLoaded } = useAuth();
-  const { hydrated, onboarded, userName, completeOnboarding, setPlacement } =
+  const { hydrated, onboarded, userName, completeOnboarding, setPlacement, recordCourseCreated } =
     useProgress();
   const { allCourses, addCourse, getCourseById, hydrated: coursesHydrated } = useCustomCourses();
 
@@ -1356,6 +1356,7 @@ export default function OnboardingPage() {
         onClose={() => setAiOpen(false)}
         onCreated={(course) => {
           addCourse(course);
+          recordCourseCreated();
           setInterests((prev) => [...prev, course.id]);
           setAiOpen(false);
         }}

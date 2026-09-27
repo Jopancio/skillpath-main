@@ -1,9 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Eye, Lock, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import { useI18n, pick } from "@/lib/i18n";
 import { useCustomCourses } from "@/hooks/use-custom-courses";
+import { useProgress } from "@/hooks/use-progress";
 import type { Category, Difficulty } from "@/data/types";
 import { CourseCard } from "@/components/course/CourseCard";
 import { AICourseDialog } from "@/components/ui/AICourseDialog";
@@ -21,7 +24,13 @@ const difficulties: Difficulty[] = ["beginner", "intermediate", "advanced"];
 
 export default function CoursesPage() {
   const { t, locale } = useI18n();
+  const en = locale === "en";
+  const { user } = useAuth();
+  // AuthGate only renders this page for a guest once auth has loaded, so a
+  // missing user here always means "guest preview".
+  const isGuest = !user;
   const { allCourses, addCourse } = useCustomCourses();
+  const { recordCourseCreated } = useProgress();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "all">("all");
   const [level, setLevel] = useState<Difficulty | "all">("all");
@@ -53,6 +62,34 @@ export default function CoursesPage() {
         {t.courses.catalogTitle}
       </h1>
       <p className="mt-2 text-muted">{t.courses.catalogSubtitle}</p>
+
+      {/* Guest preview banner */}
+      {isGuest && (
+        <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-card sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-background text-muted">
+              <Eye className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="font-display text-sm font-bold">
+                {en ? "You're in preview mode" : "Kamu sedang dalam mode pratinjau"}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                {en
+                  ? "Browse every course freely. Sign in to open lessons, track progress, and create your own skill."
+                  : "Lihat semua kursus sepuasnya. Masuk untuk membuka materi, menyimpan progres, dan membuat skill sendiri."}
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/login"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-xs font-bold text-white transition-transform hover:scale-[1.03]"
+          >
+            {en ? "Sign in / Sign up" : "Masuk / Daftar"}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="mt-8 flex flex-col gap-4 md:flex-row md:items-center">
@@ -102,10 +139,27 @@ export default function CoursesPage() {
       {filtered.length > 0 ? (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((c, i) => (
-            <CourseCard key={c.id} course={c} index={i} />
+            <CourseCard key={c.id} course={c} index={i} locked={isGuest} />
           ))}
 
-          {/* Add-new-skill card (last position) */}
+          {/* Add-new-skill card (last position) — disabled for guests */}
+          {isGuest ? (
+            <Link
+              href="/login"
+              aria-label={en ? "Sign in to create your own skill" : "Masuk untuk membuat skill sendiri"}
+              className="group flex h-full min-h-[240px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-border bg-card/40 p-6 text-center"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/20 text-muted">
+                <Lock className="h-6 w-6" />
+              </span>
+              <span className="font-display text-lg font-bold text-muted">
+                {t.courses.addSkillButton}
+              </span>
+              <span className="max-w-[220px] text-xs leading-relaxed text-muted">
+                {en ? "Sign in to create a skill with AI." : "Masuk dulu untuk membuat skill dengan AI."}
+              </span>
+            </Link>
+          ) : (
           <button
             type="button"
             onClick={() => setAiOpen(true)}
@@ -121,6 +175,7 @@ export default function CoursesPage() {
               {t.courses.addSkillDesc}
             </span>
           </button>
+          )}
         </div>
       ) : (
         <div className="mt-16 rounded-2xl border border-dashed border-border bg-card p-12 text-center text-muted">
@@ -128,15 +183,18 @@ export default function CoursesPage() {
         </div>
       )}
 
-      {/* Add-new-skill modal */}
+      {/* Add-new-skill modal (signed-in only: the AI route needs auth) */}
+      {!isGuest && (
       <AICourseDialog
         open={aiOpen}
         onClose={() => setAiOpen(false)}
         onCreated={(course) => {
           addCourse(course);
+          recordCourseCreated();
           setAiOpen(false);
         }}
       />
+      )}
     </div>
   );
 }

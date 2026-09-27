@@ -1830,7 +1830,7 @@ function AiTool({
   completedLessons?: ReadonlySet<string>;
 }) {
   const { t, locale } = useI18n();
-  const { userName, xp, streak, level, quizResults, onboarding, placement } =
+  const { userName, xp, streak, level, quizResults, onboarding, placement, recordAiAsk } =
     useProgress();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -1899,6 +1899,8 @@ function AiTool({
       });
       const answer =
         typeof data?.answer === "string" && data.answer ? data.answer : t.studyTools.aiError;
+      // Only answered questions count toward the Top AI Ask board.
+      if (typeof data?.answer === "string" && data.answer) recordAiAsk();
       setMessages([...nextMessages, { role: "assistant", content: answer }]);
     } catch {
       setMessages([...nextMessages, { role: "assistant", content: t.studyTools.aiError }]);

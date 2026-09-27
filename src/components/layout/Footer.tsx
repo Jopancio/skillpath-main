@@ -63,9 +63,9 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <a href="#" className="transition-colors hover:text-primary">
+              <Link href="/about#contact" className="transition-colors hover:text-primary">
                 {t.footer.contact}
-              </a>
+              </Link>
             </li>
           </ul>
         </div>

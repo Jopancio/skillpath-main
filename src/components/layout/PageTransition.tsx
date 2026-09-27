@@ -16,7 +16,9 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 /*    3. "reveal" — the veil lifts while the new page fades and  */
 /*                  rises into place.                            */
 /*  Navigating mid-sequence retargets it to the newest route.    */
-/*  Honors prefers-reduced-motion by swapping instantly.         */
+/*  Skipped entirely for prefers-reduced-motion, for hops        */
+/*  between app pages, and for anything touching the lesson      */
+/*  player (see isInstantNav) — those swap instantly.            */
 /* ============================================================ */
 
 const EASE_OUT: [number, number, number, number] = [0.22, 1, 0.36, 1];
@@ -27,7 +29,38 @@ type Phase = "idle" | "out" | "text" | "reveal";
 const OUT_MS = 380;
 const TEXT_MS = 1300;
 const REVEAL_MS = 640;
-const INSTANT_ROUTES = new Set(["/dashboard", "/courses", "/profile", "/settings"]);
+
+/** App pages users hop between constantly — swapped without the veil. */
+const INSTANT_ROUTES = new Set(["/dashboard", "/courses", "/profile", "/badges", "/leaderboard", "/settings", "/simulations"]);
+
+/** Instant-list page, or any learner's public profile (/profile/[id]). */
+function isAppRoute(pathname: string): boolean {
+  return INSTANT_ROUTES.has(pathname) || pathname.startsWith("/profile/");
+}
+
+/**
+ * The lesson player. Matched by prefix because every lesson is its own
+ * path (/learn/[courseId]/[lessonId]), so an exact list could never name
+ * them all.
+ */
+function isLessonRoute(pathname: string): boolean {
+  return pathname === "/learn" || pathname.startsWith("/learn/");
+}
+
+/**
+ * Whether this navigation skips the splash entirely.
+ *
+ * The veil runs ~2.3s. Inside a study session a learner hops lesson →
+ * lesson → chapter quiz → lesson dozens of times, and a branded
+ * interstitial on every hop reads as the app hanging rather than as
+ * polish. So anything touching the lesson player is instant, in or out;
+ * the splash stays for entries from outside the app (landing, login,
+ * onboarding, certificate).
+ */
+function isInstantNav(from: string, to: string): boolean {
+  if (isLessonRoute(from) || isLessonRoute(to)) return true;
+  return isAppRoute(from) && isAppRoute(to);
+}
 
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -46,7 +79,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   // the sequence.
   const [prevPathname, setPrevPathname] = useState(pathname);
   if (prevPathname !== pathname) {
-    const instant = INSTANT_ROUTES.has(prevPathname) && INSTANT_ROUTES.has(pathname);
+    const instant = isInstantNav(prevPathname, pathname);
     setPrevPathname(pathname);
     setInstantNavigation(instant);
     if (reduceMotion || instant) {

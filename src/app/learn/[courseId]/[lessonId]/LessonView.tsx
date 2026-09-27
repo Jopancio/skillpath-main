@@ -158,11 +158,12 @@ function LessonContent({
         ))}
       </div>
 
-      <motion.article
+      {/* Plain <article>: no entrance animation — a fade+rise on every
+          lesson change is a page transition in disguise. The key stays so
+          switching lessons remounts the subtree and resets per-lesson
+          state (flipped flashcards would otherwise carry over). */}
+      <article
         key={lesson.id}
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
         className="mt-6 rounded-3xl border border-border bg-card p-6 shadow-card md:p-8"
       >
         <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-muted">
@@ -206,7 +207,7 @@ function LessonContent({
             <FlipCards cards={lesson.cards} />
           )}
         </div>
-      </motion.article>
+      </article>
 
       {/* Action bar */}
       <div className="sticky bottom-4 mt-8">

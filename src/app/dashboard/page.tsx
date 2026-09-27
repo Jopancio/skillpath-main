@@ -730,14 +730,22 @@ export default function DashboardPage() {
                       variants={groupVariants}
                       className="mt-2.5 grid grid-cols-2 gap-3"
                     >
-                      {lockedBadges.map((b) => (
+                      {lockedBadges.slice(0, 4).map((b) => (
                         <BadgeTile key={b.id} badge={b} earned={false} />
                       ))}
                     </motion.div>
                   </>
                 )}
 
-                <div className="mt-6">
+                <div className="mt-6 grid gap-2">
+                  <ButtonLink
+                    href="/badges"
+                    variant="outline"
+                    className="w-full min-h-11"
+                  >
+                    {locale === "en" ? "See all badges" : "Lihat semua badge"}
+                    <Award aria-hidden className="h-4 w-4" />
+                  </ButtonLink>
                   <ButtonLink
                     href="/courses"
                     variant="outline"
@@ -1105,9 +1113,10 @@ function BoardCard({ entries }: { entries: LeaderboardEntry[] }) {
         <div className="grid grid-cols-3 items-end gap-2 pb-3 sm:gap-3">
           {/* Visual order 2-1-3 around the taller first-place pedestal */}
           {[podium[1], podium[0], podium[2]].map((entry, i) => (
-            <div
+            <Link
               key={entry.userId}
-              className="flex min-w-0 flex-col items-center text-center"
+              href={`/profile/${encodeURIComponent(entry.userId)}`}
+              className="flex min-w-0 flex-col items-center rounded-xl text-center transition-transform hover:-translate-y-0.5"
             >
               <div className="relative">
                 {i === 1 && (
@@ -1150,7 +1159,7 @@ function BoardCard({ entries }: { entries: LeaderboardEntry[] }) {
                   {entry.rank}
                 </span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
@@ -1174,9 +1183,10 @@ function BoardCard({ entries }: { entries: LeaderboardEntry[] }) {
 function BoardRow({ entry }: { entry: LeaderboardEntry }) {
   const { t } = useI18n();
   return (
-    <div
+    <Link
+      href={`/profile/${encodeURIComponent(entry.userId)}`}
       className={cn(
-        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 sm:gap-3 sm:px-4",
+        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors hover:bg-background sm:gap-3 sm:px-4",
         entry.isCurrentUser && "bg-primary/10 ring-1 ring-inset ring-primary/30"
       )}
     >
@@ -1228,7 +1238,7 @@ function BoardRow({ entry }: { entry: LeaderboardEntry }) {
         <Zap aria-hidden className="h-3.5 w-3.5" />
         <span className="tabular-nums">{entry.xp}</span>
       </span>
-    </div>
+    </Link>
   );
 }
 

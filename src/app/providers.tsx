@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth";
 import { ProgressProvider } from "@/hooks/use-progress";
 import { CustomCoursesProvider } from "@/hooks/use-custom-courses";
 import { AuthGate } from "@/components/layout/AuthGate";
+import { BadgeUnlockToast } from "@/components/badges/BadgeUnlockToast";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -16,6 +17,7 @@ export function Providers({ children }: { children: ReactNode }) {
           <ProgressProvider>
             <CustomCoursesProvider>
               <AuthGate>{children}</AuthGate>
+              <BadgeUnlockToast />
             </CustomCoursesProvider>
           </ProgressProvider>
         </AuthProvider>

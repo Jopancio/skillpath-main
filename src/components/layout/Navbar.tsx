@@ -28,6 +28,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Trophy,
   X,
   Zap,
 } from "lucide-react";
@@ -132,8 +133,9 @@ export function Navbar() {
             { href: "/courses", label: t.nav.courses, icon: Map, anchor: false },
             { href: "/simulations", label: "Simulasi Kerja", icon: BriefcaseBusiness, anchor: false },
             { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard, anchor: false },
+            ...(user ? [{ href: "/leaderboard", label: t.nav.leaderboard, icon: Trophy, anchor: false }] : []),
           ],
-    [isLanding, t]
+    [isLanding, t, user]
   );
 
   // Scroll-spy: while on the landing page, the section currently in the

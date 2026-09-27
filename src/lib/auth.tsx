@@ -34,20 +34,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { getToken: clerkGetToken } = useClerkAuth();
 
   // Map Clerk's user to the shape the rest of the app already consumes.
+  //
+  // Read the primitive fields OUT of Clerk's user resource first, then
+  // memoize on THOSE. Clerk re-creates the UserResource object whenever it
+  // refreshes the user, and an OAuth account is refreshed more often than a
+  // password one (its external-account data and provider tokens are
+  // revalidated). Memoizing on the object identity therefore handed out a
+  // brand-new `user` object on each refresh even though nothing had changed,
+  // which restarted every effect keyed on `user` — including the leaderboard
+  // fetch, which then never got to finish.
+  const clerkId = user?.id;
+  const fullName = user?.fullName;
+  const username = user?.username;
+  const primaryEmail = user?.primaryEmailAddress?.emailAddress;
+  const imageUrl = user?.imageUrl;
+  const createdAtIso = user?.createdAt?.toISOString();
+  const isGoogle = !!user?.externalAccounts?.some(
+    (acc) => acc.provider === "google"
+  );
+
   const mapped = useMemo<AuthUser | null>(() => {
-    if (!isSignedIn || !user) return null;
-    const primary = user.primaryEmailAddress?.emailAddress;
+    if (!isSignedIn || !clerkId) return null;
     return {
-      id: user.id,
-      name: user.fullName || user.username || primary?.split("@")[0] || "Pengguna",
-      email: primary ?? "",
-      provider: user.externalAccounts.some((acc) => acc.provider === "google")
-        ? "google"
-        : "email",
-      avatarUrl: user.imageUrl,
-      createdAt: user.createdAt?.toISOString() ?? new Date().toISOString(),
+      id: clerkId,
+      name: fullName || username || primaryEmail?.split("@")[0] || "Pengguna",
+      email: primaryEmail ?? "",
+      provider: isGoogle ? "google" : "email",
+      avatarUrl: imageUrl,
+      createdAt: createdAtIso ?? new Date().toISOString(),
     };
-  }, [isSignedIn, user]);
+  }, [
+    isSignedIn,
+    clerkId,
+    fullName,
+    username,
+    primaryEmail,
+    imageUrl,
+    createdAtIso,
+    isGoogle,
+  ]);
 
   const signOut = useCallback(async () => {
     await clerkSignOut();

@@ -2,36 +2,14 @@
 
 import { useMemo } from "react";
 import { useProgress } from "@/hooks/use-progress";
-import { courses, isCourseComplete } from "@/data/courses";
-import { badges, type Badge } from "@/data/badges";
+import { evaluateBadges, type BadgeWithStatus } from "@/lib/badge-engine";
 
-export interface BadgeWithStatus extends Badge {
-  earned: boolean;
-}
+export type { BadgeWithStatus };
 
-/** Computes badge earned-status including course-completer which needs course data. */
+/** Every badge with the signed-in learner's earned status and progress. */
 export function useBadges(): BadgeWithStatus[] {
-  const { xp, streak, lessonsCompletedCount, quizResults, completedLessons } =
-    useProgress();
-
-  return useMemo(() => {
-    const anyCourseComplete = courses.some((c) =>
-      isCourseComplete(c, completedLessons)
-    );
-    const earned = new Set<string>();
-    if (lessonsCompletedCount >= 1) earned.add("first-steps");
-    if (streak >= 3) earned.add("streak-3");
-    if (streak >= 7) earned.add("streak-7");
-    if (lessonsCompletedCount >= 10) earned.add("bookworm");
-    if (lessonsCompletedCount >= 25) earned.add("scholar");
-    if (Object.values(quizResults).some((r) => r.score === 100))
-      earned.add("quiz-master");
-    if (anyCourseComplete) earned.add("course-completer");
-    if (Object.values(quizResults).some((r) => r.passed)) earned.add("certified");
-    if (xp >= 500) earned.add("xp-500");
-    if (xp >= 1000) earned.add("xp-1000");
-    return badges.map((b) => ({ ...b, earned: earned.has(b.id) }));
-  }, [xp, streak, lessonsCompletedCount, quizResults, completedLessons]);
+  const { badgeStats, badgeUnlocks } = useProgress();
+  return useMemo(() => evaluateBadges(badgeStats, badgeUnlocks), [badgeStats, badgeUnlocks]);
 }
 
 /** Returns ids of badges earned (for new-badge detection). */

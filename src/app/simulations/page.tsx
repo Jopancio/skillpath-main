@@ -9,6 +9,7 @@ import { pick } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { MAX_WORK_FILE_BYTES, WORK_FILE_ACCEPT, parseWorkRecord, workFileKind, type WorkAttempt, type WorkRecord, type WorkReview } from "@/lib/work-simulation";
 import type { Course } from "@/data/types";
+import { RotatingText } from "@/components/ui/rotating-text";
 
 const STORAGE = "skillpath-work-lab-v2";
 function courseTitle(course: Course) { return pick("id", course.title); }
@@ -51,7 +52,16 @@ export default function SimulationsPage() {
   </div>;
 }
 
-function LoadingCard() { return <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-border bg-card p-8 text-center shadow-card"><span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Loader2 className="h-8 w-8 animate-spin" /></span><h2 className="mt-5 font-display text-xl font-extrabold">AI sedang menyiapkan brief...</h2><p className="mt-2 max-w-sm text-sm font-medium text-muted">AI membaca struktur kursus dan membuat tugas yang menghasilkan artefak nyata. Biasanya kurang dari 30 detik.</p></motion.div>; }
+const LOADING_MESSAGES = [
+  "AI membaca struktur kursus dan membuat tugas yang menghasilkan artefak nyata.",
+  "Menganalisis setiap modul untuk menemukan skill inti yang perlu kamu praktikkan.",
+  "Merancang brief seperti dari klien sungguhan, lengkap dengan target dan batasan.",
+  "Menyusun kriteria penilaian agar hasil kerjamu bisa direview dengan jujur.",
+  "Menambahkan tips dan contoh supaya kamu tahu harus mulai dari mana.",
+  "Hampir selesai — merapikan brief agar siap kamu kerjakan. Biasanya kurang dari 30 detik.",
+] as const;
+
+function LoadingCard() { return <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-border bg-card p-8 text-center shadow-card"><span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Loader2 className="h-8 w-8 animate-spin" /></span><h2 className="mt-5 font-display text-xl font-extrabold">AI sedang menyiapkan brief...</h2><p className="mt-2 flex min-h-[3.75rem] max-w-sm items-start justify-center text-sm font-medium text-muted"><RotatingText words={LOADING_MESSAGES} interval={4200} stagger={0.05} /></p></motion.div>; }
 function EmptyState({ onOpen, error }: { onOpen: () => void; error: string }) { return <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-3xl border border-dashed border-border bg-card p-10 text-center shadow-card"><Target className="mx-auto h-10 w-10 text-primary" /><h2 className="mt-4 font-display text-2xl font-extrabold">Mulai dari kursus yang kamu suka</h2><p className="mx-auto mt-2 max-w-md text-sm text-muted">Pilih satu kursus. AI akan membuat simulasi pekerjaan yang sesuai dengan materi belajarnya.</p>{error && <p className="mx-auto mt-4 max-w-lg rounded-xl bg-error/10 p-3 text-sm font-bold text-error"><AlertCircle className="mr-1 inline h-4 w-4" />{error}</p>}<button onClick={onOpen} className="mt-6 rounded-xl bg-gradient-to-r from-primary to-deep-orange px-5 py-3 text-sm font-extrabold text-white shadow-soft">Pilih kursus <ChevronRight className="ml-1 inline h-4 w-4" /></button></motion.div>; }
 
 function CoursePicker({ open, courses, query, setQuery, onClose, onChoose }: { open: boolean; courses: Course[]; query: string; setQuery: (v: string) => void; onClose: () => void; onChoose: (c: Course) => void }) {

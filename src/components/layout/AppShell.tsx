@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Award,
   CircleUserRound,
   Flame,
   LayoutDashboard,
+  Lock,
   Map,
   Settings,
+  Trophy,
   Zap,
   BriefcaseBusiness,
 } from "lucide-react";
@@ -22,7 +25,7 @@ import { cn } from "@/lib/utils";
  * Landing, login, onboarding, learn/quiz/certificate flows stay
  * sidebar-free so they keep their immersive full-width layouts.
  */
-const SHELL_ROUTES = ["/dashboard", "/courses", "/profile", "/settings", "/simulations"];
+const SHELL_ROUTES = ["/dashboard", "/courses", "/profile", "/badges", "/leaderboard", "/settings", "/simulations"];
 
 /**
  * Course detail pages (/courses/[id]) render their own CourseToolsSidebar
@@ -67,7 +70,9 @@ function AppSidebar() {
     { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/courses", label: t.nav.courses, icon: Map },
     { href: "/simulations", label: "Simulasi Kerja", icon: BriefcaseBusiness },
+    { href: "/leaderboard", label: t.nav.leaderboard, icon: Trophy },
     { href: "/profile", label: t.nav.profile, icon: CircleUserRound },
+    { href: "/badges", label: "Badge", icon: Award },
     { href: "/settings", label: t.nav.settings, icon: Settings },
   ];
 
@@ -80,6 +85,22 @@ function AppSidebar() {
       <nav aria-label="Navigasi aplikasi" className="flex flex-col gap-1">
         {links.map(({ href, label, icon: Icon }) => {
           const active = !!pathname?.startsWith(href);
+          // Guests can only preview the course catalog; every other app page
+          // needs an account, so show it greyed out with a lock.
+          if (!user && href !== "/courses") {
+            return (
+              <Link
+                key={href}
+                href="/login"
+                title="Masuk untuk membuka"
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-muted/60 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <Icon className="h-4.5 w-4.5 shrink-0" />
+                <span className="flex-1">{label}</span>
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+              </Link>
+            );
+          }
           return (
             <Link
               key={href}

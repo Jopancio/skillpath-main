@@ -1,21 +1,30 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { MotionConfig, motion, type Variants } from "framer-motion";
 import {
+  ArrowRight,
+  Award,
   BookOpen,
   Check,
   CircleUserRound,
+  Eye,
   Flame,
   GraduationCap,
   Mail,
   Pencil,
+  Pin,
   Target,
   Zap,
 } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, pick } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
 import { useProgress } from "@/hooks/use-progress";
+import { useBadges } from "@/hooks/use-badges";
+import { MAX_FEATURED_BADGES } from "@/data/badges";
+import { BadgeMedal } from "@/components/badges/BadgeMedal";
+import { cn } from "@/lib/utils";
 
 /* Same entrance vocabulary as the dashboard. */
 const groupVariants: Variants = {
@@ -32,7 +41,8 @@ const itemVariants: Variants = {
 };
 
 export default function ProfilePage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const en = locale === "en";
   const { user } = useAuth();
   const {
     xp,
@@ -43,7 +53,29 @@ export default function ProfilePage() {
     onboarding,
     hydrated,
     setUserName,
+    bio,
+    setBio,
+    featuredBadges,
+    setFeaturedBadges,
   } = useProgress();
+  const allBadges = useBadges();
+  const earnedBadges = allBadges.filter((b) => b.earned);
+
+  // Bio editor
+  const [editingBio, setEditingBio] = useState(false);
+  const [bioDraft, setBioDraft] = useState("");
+  const saveBio = () => {
+    setBio(bioDraft.trim());
+    setEditingBio(false);
+  };
+
+  const toggleFeatured = (id: string) => {
+    if (featuredBadges.includes(id)) {
+      setFeaturedBadges(featuredBadges.filter((x) => x !== id));
+    } else if (featuredBadges.length < MAX_FEATURED_BADGES) {
+      setFeaturedBadges([...featuredBadges, id]);
+    }
+  };
 
   const displayName = (hydrated && userName) || user?.name || "?";
   const initials = displayName
@@ -219,9 +251,151 @@ export default function ProfilePage() {
                 <p className="mt-2 max-w-md text-sm leading-relaxed text-muted sm:text-base">
                   {t.profile.subtitle}
                 </p>
+                {user && (
+                  <Link
+                    href={`/profile/${encodeURIComponent(user.id)}`}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-xs font-extrabold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    {en ? "View public profile" : "Lihat profil publik"}
+                  </Link>
+                )}
               </div>
             </div>
           </div>
+        </motion.section>
+
+        {/* ── Bio ───────────────────────────────────────────────── */}
+        <motion.section variants={itemVariants} className="mt-6 lg:mt-8">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-extrabold tracking-tight">Bio</h2>
+            {!editingBio && hydrated && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBioDraft(bio);
+                  setEditingBio(true);
+                }}
+                className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                {en ? "Edit" : "Ubah"}
+              </button>
+            )}
+          </div>
+          <div className="mt-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5">
+            {editingBio ? (
+              <>
+                <textarea
+                  value={bioDraft}
+                  onChange={(e) => setBioDraft(e.target.value.slice(0, 160))}
+                  rows={3}
+                  autoFocus
+                  aria-label="Bio"
+                  placeholder={
+                    en
+                      ? "Tell other learners about yourself…"
+                      : "Ceritakan sedikit tentang dirimu ke learner lain…"
+                  }
+                  className="w-full resize-none rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-primary"
+                />
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-xs tabular-nums text-muted">{bioDraft.length}/160</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingBio(false)}
+                      className="rounded-full px-3 py-2 text-sm font-bold text-muted hover:bg-background hover:text-foreground"
+                    >
+                      {t.profile.cancel}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveBio}
+                      className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary to-deep-orange px-4 py-2 text-sm font-extrabold text-white shadow-soft"
+                    >
+                      <Check className="h-4 w-4" />
+                      {t.profile.save}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className={cn("whitespace-pre-line text-sm leading-relaxed", !bio && "text-muted")}>
+                {bio || (en ? "No bio yet. Add one so others know you." : "Belum ada bio. Tambahkan agar learner lain mengenalmu.")}
+              </p>
+            )}
+          </div>
+        </motion.section>
+
+        {/* ── Featured badges picker ────────────────────────────── */}
+        <motion.section variants={itemVariants} className="mt-6 lg:mt-8">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-lg font-extrabold tracking-tight">
+                {en ? "Featured badges" : "Badge unggulan"}
+              </h2>
+              <p className="text-xs text-muted">
+                {en
+                  ? `Pick up to ${MAX_FEATURED_BADGES} badges to show at the top of your public profile.`
+                  : `Pilih hingga ${MAX_FEATURED_BADGES} badge untuk dipamerkan di profil publikmu.`}
+              </p>
+            </div>
+            <Link
+              href="/badges"
+              className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:underline"
+            >
+              <Award className="h-3.5 w-3.5" />
+              {en ? "All badges" : "Semua badge"}
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          {!hydrated ? (
+            <div className="mt-3 h-28 animate-pulse rounded-2xl border border-border bg-card/60" />
+          ) : earnedBadges.length === 0 ? (
+            <p className="mt-3 rounded-2xl border border-dashed border-border p-6 text-center text-sm font-semibold text-muted">
+              {en
+                ? "You haven't earned any badges yet. Finish a lesson to get your first!"
+                : "Kamu belum punya badge. Selesaikan satu pelajaran untuk meraih yang pertama!"}
+            </p>
+          ) : (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {earnedBadges.map((b) => {
+                const selected = featuredBadges.includes(b.id);
+                const full = !selected && featuredBadges.length >= MAX_FEATURED_BADGES;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => toggleFeatured(b.id)}
+                    disabled={full}
+                    aria-pressed={selected}
+                    className={cn(
+                      "relative flex flex-col items-center rounded-2xl border p-4 text-center transition-all",
+                      selected
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                        : "border-border bg-card hover:border-primary/40",
+                      full && "cursor-not-allowed opacity-50"
+                    )}
+                  >
+                    {selected && (
+                      <span className="absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full bg-primary text-white">
+                        <Pin className="h-2.5 w-2.5" />
+                      </span>
+                    )}
+                    <BadgeMedal badge={b} earned size="sm" />
+                    <span className="mt-2 line-clamp-2 text-xs font-bold leading-tight">{pick(locale, b.name)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {hydrated && earnedBadges.length > 0 && (
+            <p className="mt-2 text-xs font-bold tabular-nums text-muted">
+              {featuredBadges.length}/{MAX_FEATURED_BADGES} {en ? "selected" : "dipilih"}
+            </p>
+          )}
         </motion.section>
 
         {/* ── Stats ─────────────────────────────────────────────── */}

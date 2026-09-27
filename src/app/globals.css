@@ -450,6 +450,76 @@ body::before {
 .dark .hero-waves-background canvas{mix-blend-mode:screen;}
 .feature-card{transition:transform .25s ease,box-shadow .25s ease,border-color .25s ease}.feature-card:hover{transform:translateY(-5px);border-color:color-mix(in srgb,var(--color-primary) 35%,var(--color-border));box-shadow:0 18px 45px -24px rgb(37 99 235 / .35)}
 .landing-cta{box-shadow:0 25px 65px -28px rgb(16 43 102 / .55)}
+/* Lit-surface wash under the decorative rings: without it the navy panel is a
+   flat block and the rings look like they float on nothing. Clipped by the
+   card's overflow-hidden, and painted below the z-10 content. */
+.landing-cta::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 55% 65% at 82% 12%,rgb(56 189 248 / .16),transparent 70%),radial-gradient(ellipse 45% 55% at 4% 92%,rgb(37 99 235 / .28),transparent 72%)}
 
 /* Compatibility alias for existing components */
 @theme { --color-deep-orange: #1D4ED8; }
+
+
+/* About / contact page: drifting hero blobs, shifting card banner, soft glow. */
+@keyframes about-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(30px, -20px) scale(1.12);
+  }
+}
+@keyframes about-banner-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.about-blob {
+  position: absolute;
+  z-index: 0;
+  width: 320px;
+  height: 320px;
+  border-radius: 9999px;
+  filter: blur(70px);
+  opacity: 0.35;
+  pointer-events: none;
+  animation: about-drift 12s ease-in-out infinite;
+}
+.about-blob-a {
+  top: -120px;
+  left: -60px;
+  background: var(--color-primary);
+}
+.about-blob-b {
+  right: -80px;
+  bottom: -140px;
+  background: var(--color-secondary);
+  animation-delay: -6s;
+}
+.team-card-banner {
+  background-size: 200% 200%;
+  animation: about-banner-shift 8s ease-in-out infinite;
+}
+.about-contact-glow {
+  position: absolute;
+  top: -80px;
+  right: -80px;
+  z-index: -1;
+  width: 220px;
+  height: 220px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  opacity: 0.12;
+  filter: blur(50px);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .about-blob,
+  .team-card-banner {
+    animation: none;
+  }
+}

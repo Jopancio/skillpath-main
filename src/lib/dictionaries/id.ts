@@ -29,6 +29,7 @@ export const id = {
     faq: "FAQ",
     courses: "Kursus",
     dashboard: "Dasboard",
+    leaderboard: "Leaderboard",
     certificate: "Sertifikat",
     profile: "Profil",
     settings: "Pengaturan",
