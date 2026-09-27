@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { RotatingText } from "./rotating-text";
 
 // Lazy-load the WebGL component so it never blocks SSR / first paint
 const Strands = dynamic(() => import("./Strands"), { ssr: false });
@@ -13,6 +14,8 @@ interface AIThinkingLoaderProps {
   title: string;
   /** Optional smaller description line */
   description?: string;
+  /** Optional list of description lines, cycled word by word while loading. Overrides `description`. */
+  descriptions?: readonly string[];
   /** Height of the strands canvas area in px (default 260) */
   height?: number;
   /** Compact mode for dialogs: hides title/desc */
@@ -26,6 +29,7 @@ interface AIThinkingLoaderProps {
 export function AIThinkingLoader({
   title,
   description,
+  descriptions,
   height = 260,
   compact = false,
 }: AIThinkingLoaderProps) {
@@ -56,8 +60,13 @@ export function AIThinkingLoader({
       {!compact && (
         <>
           <h1 className="mt-6 font-display text-2xl font-extrabold">{title}</h1>
-          {description && (
-            <p className="mt-2 max-w-sm text-sm text-muted">{description}</p>
+          {descriptions && descriptions.length > 0 ? (
+            // Fixed min-height so the layout doesn't jump as lines change length.
+            <p className="mt-2 flex min-h-[2.5rem] max-w-sm items-start justify-center text-sm text-muted">
+              <RotatingText words={descriptions} interval={3800} stagger={0.06} />
+            </p>
+          ) : (
+            description && <p className="mt-2 max-w-sm text-sm text-muted">{description}</p>
           )}
         </>
       )}

@@ -453,6 +453,7 @@ export default function OnboardingPage() {
               <AIThinkingLoader
                 title={coach.styleAnalyzing}
                 description={coach.styleAnalyzingDesc}
+                descriptions={coach.styleAnalyzingSteps}
                 height={280}
               />
               {coachError && (
@@ -607,6 +608,7 @@ export default function OnboardingPage() {
                   phase === "evaluating" ? coach.evaluating : coach.analyzing
                 }
                 description={coach.evaluatingDesc}
+                descriptions={coach.evaluatingSteps}
                 height={280}
               />
 
