@@ -22,6 +22,7 @@ import {
 
 const COSMOSHUB_URL = "https://api.cosmoshub.tech/v1/chat/completions";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 // Each request now runs ONE generation step (see POST below), which keeps it
 // well inside Vercel's limit; this is headroom for a slow model on one step.
@@ -29,7 +30,7 @@ export const maxDuration = 300;
 
 /** Which chat-completions backend one generation run talks to. */
 interface AiProvider {
-  name: "cosmoshub" | "groq";
+  name: "cosmoshub" | "groq" | "gemini";
   url: string;
   apiKey: string;
   model: string;
@@ -176,31 +177,48 @@ async function callAIJson(params: {
   prompt: string;
 }): Promise<unknown> {
   const { provider } = params;
-  const body = JSON.stringify({
-    model: provider.model,
-    temperature: provider.temperature,
-    max_tokens: provider.maxTokens,
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a course generator. Always respond with a single valid JSON object only. When reference material is provided in the user message, treat it as the authoritative source for the course content.",
-      },
-      { role: "user", content: params.prompt },
-    ],
-  });
+  const system =
+    "You are a course generator. Always respond with a single valid JSON object only. When reference material is provided in the user message, treat it as the authoritative source for the course content.";
+  const isGemini = provider.name === "gemini";
+
+  const body = isGemini
+    ? JSON.stringify({
+        // Native Gemini generateContent API.
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: params.prompt }] }],
+        generationConfig: {
+          temperature: provider.temperature,
+          maxOutputTokens: provider.maxTokens,
+          responseMimeType: "application/json",
+          // 2.5 Flash "thinks" by default, which is slow and eats output
+          // tokens; a course step does not need it.
+          ...(/^gemini-2\.5-flash/.test(provider.model)
+            ? { thinkingConfig: { thinkingBudget: 0 } }
+            : {}),
+        },
+      })
+    : JSON.stringify({
+        model: provider.model,
+        temperature: provider.temperature,
+        max_tokens: provider.maxTokens,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: params.prompt },
+        ],
+      });
+
+  const headers: Record<string, string> = isGemini
+    ? { "Content-Type": "application/json", "x-goog-api-key": provider.apiKey }
+    : { "Content-Type": "application/json", Authorization: `Bearer ${provider.apiKey}` };
 
   let aiRes: Response | null = null;
-  // One retry on 429 (Groq rate limits per minute), honouring Retry-After.
+  // One retry on 429 (per-minute rate limits), honouring Retry-After.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       aiRes = await fetch(provider.url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${provider.apiKey}`,
-        },
+        headers,
         body,
         // Never let one hung call eat the whole function budget.
         signal: AbortSignal.timeout(120_000),
@@ -223,8 +241,23 @@ async function callAIJson(params: {
     throw new AiCallError(`ai_error_${status}`);
   }
   const data = await aiRes.json();
-  const text: string = data?.choices?.[0]?.message?.content ?? "";
-  const finishReason: string = data?.choices?.[0]?.finish_reason ?? "";
+  let text: string;
+  let finishReason: string;
+  if (isGemini) {
+    const cand = data?.candidates?.[0];
+    const parts: unknown[] = Array.isArray(cand?.content?.parts) ? cand.content.parts : [];
+    // Skip "thought" parts some Gemini models return alongside the answer.
+    text = parts
+      .map((p) => {
+        const part = (p ?? {}) as { text?: unknown; thought?: unknown };
+        return part.thought ? "" : typeof part.text === "string" ? part.text : "";
+      })
+      .join("");
+    finishReason = String(cand?.finishReason ?? data?.promptFeedback?.blockReason ?? "");
+  } else {
+    text = data?.choices?.[0]?.message?.content ?? "";
+    finishReason = data?.choices?.[0]?.finish_reason ?? "";
+  }
   if (!text) {
     // e.g. reasoning models returning empty content with finish_reason "length"
     console.error(
@@ -249,8 +282,23 @@ async function callAIJson(params: {
 
 const MAX_CHAPTERS_PER_STEP = 4;
 
-/** PDF courses use Groq when a key is configured; everything else CosmosHub. */
+/**
+ * PDF courses: Gemini API (GEMINI_API_KEY) first, then Groq, then CosmosHub.
+ * Courses without a PDF always use CosmosHub.
+ */
 function pickProvider(usePdf: boolean): AiProvider | null {
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (usePdf && geminiKey) {
+    const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    return {
+      name: "gemini",
+      url: `${GEMINI_BASE}/${encodeURIComponent(model)}:generateContent`,
+      apiKey: geminiKey,
+      model,
+      maxTokens: Number(process.env.GEMINI_MAX_TOKENS) || 16000,
+      temperature: 0.7,
+    };
+  }
   const groqKey = process.env.GROQ_API_KEY;
   if (usePdf && groqKey) {
     return {
@@ -389,6 +437,10 @@ export async function POST(request: Request) {
 
   /* ---------------- step 1: outline ---------------- */
   if (step === "outline") {
+    // PDF reference is temporarily disabled; set PDF_REFERENCE_ENABLED=true to restore.
+    if (body.pdf && process.env.PDF_REFERENCE_ENABLED !== "true") {
+      return NextResponse.json({ error: "pdf_disabled" }, { status: 403 });
+    }
     let pdf: PdfReferenceInput | undefined;
     try {
       pdf = await sanitizePdf(body.pdf);
@@ -438,10 +490,10 @@ export async function POST(request: Request) {
   // Later steps carry the outline + extracted PDF text from step 1.
   const outline = outlineFromClient(body.outline);
   if (!outline) return NextResponse.json({ error: "invalid_outline" }, { status: 400 });
-  const usePdf = Boolean(body.pdf);
+  const usePdf = Boolean(body.pdf) && process.env.PDF_REFERENCE_ENABLED === "true";
   const provider = pickProvider(usePdf);
   if (!provider) return NextResponse.json({ error: "missing_api_key" }, { status: 500 });
-  const pdf = pdfFromClientText(body.pdf, provider);
+  const pdf = usePdf ? pdfFromClientText(body.pdf, provider) : undefined;
 
   /* ---------------- step 2: a batch of chapters ---------------- */
   if (step === "chapters") {

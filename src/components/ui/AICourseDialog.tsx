@@ -20,6 +20,12 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const MAX_PDF_SIZE = 5 * 1024 * 1024; // 5 MB
+/**
+ * PDF reference upload is temporarily disabled: the dropzone is hidden and no
+ * PDF is sent. Flip to `true` to bring it back (the server also needs
+ * PDF_REFERENCE_ENABLED=true).
+ */
+const PDF_REFERENCE_ENABLED = false;
 const MIN_SKILL_LEN = 3;
 const MAX_SKILL_LEN = 80;
 
@@ -189,7 +195,7 @@ function DialogInner({
 
       const first = await post({
         step: "outline",
-        ...(pdf ? { pdf: { name: pdf.name, size: pdf.size, data: pdf.dataUrl } } : {}),
+        ...(PDF_REFERENCE_ENABLED && pdf ? { pdf: { name: pdf.name, size: pdf.size, data: pdf.dataUrl } } : {}),
       });
       const outline = first.outline as { modules: unknown[] } | undefined;
       if (!outline || !Array.isArray(outline.modules)) throw new Error("no outline");
@@ -330,7 +336,8 @@ function DialogInner({
             </div>
           </div>
 
-          {/* PDF dropzone */}
+          {/* PDF dropzone (temporarily disabled — see PDF_REFERENCE_ENABLED) */}
+          {PDF_REFERENCE_ENABLED && (
           <div className="mt-5">
             <p className="text-xs font-extrabold text-foreground">{ob.aiPdfLabel}</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
@@ -407,6 +414,7 @@ function DialogInner({
               <p className="mt-2 text-[11px] font-bold text-error">{pdfError}</p>
             )}
           </div>
+          )}
 
           {error && (
             <p className="mt-3 rounded-xl bg-error/10 px-4 py-2.5 text-xs font-bold text-error">
