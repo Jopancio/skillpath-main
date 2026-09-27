@@ -61,7 +61,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 /* ------------------------------------------------------------------ */
 
 function AppSidebar() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const en = locale === "en";
   const { user } = useAuth();
   const { xp, streak, hydrated } = useProgress();
   const pathname = usePathname();
@@ -69,10 +70,10 @@ function AppSidebar() {
   const links = [
     { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/courses", label: t.nav.courses, icon: Map },
-    { href: "/simulations", label: "Simulasi Kerja", icon: BriefcaseBusiness },
+    { href: "/simulations", label: en ? "Work Simulation" : "Simulasi Kerja", icon: BriefcaseBusiness },
     { href: "/leaderboard", label: t.nav.leaderboard, icon: Trophy },
     { href: "/profile", label: t.nav.profile, icon: CircleUserRound },
-    { href: "/badges", label: "Badge", icon: Award },
+    { href: "/badges", label: en ? "Badges" : "Badge", icon: Award },
     { href: "/settings", label: t.nav.settings, icon: Settings },
   ];
 
@@ -82,7 +83,7 @@ function AppSidebar() {
         Menu
       </p>
 
-      <nav aria-label="Navigasi aplikasi" className="flex flex-col gap-1">
+      <nav aria-label={en ? "App navigation" : "Navigasi aplikasi"} className="flex flex-col gap-1">
         {links.map(({ href, label, icon: Icon }) => {
           const active = !!pathname?.startsWith(href);
           // Guests can only preview the course catalog; every other app page
@@ -92,7 +93,7 @@ function AppSidebar() {
               <Link
                 key={href}
                 href="/login"
-                title="Masuk untuk membuka"
+                title={en ? "Sign in to unlock" : "Masuk untuk membuka"}
                 className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-muted/60 transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
                 <Icon className="h-4.5 w-4.5 shrink-0" />
