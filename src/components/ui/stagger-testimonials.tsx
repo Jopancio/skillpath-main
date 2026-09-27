@@ -74,7 +74,7 @@ const testimonials: StaggerTestimonial[] = [
 
 function TestimonialCard({ position, testimonial, handleMove, cardSize }: TestimonialCardProps) {
   const isCenter = position === 0;
-  const [name] = testimonial.by.split(" · ");
+  const [name, role] = testimonial.by.split(" · ");
   const monogram =
     testimonial.initials ??
     name
@@ -84,6 +84,8 @@ function TestimonialCard({ position, testimonial, handleMove, cardSize }: Testim
       .map((word) => word[0] ?? "")
       .join("")
       .toUpperCase();
+  // Phones get a slightly taller-than-wide card so a long quote has room.
+  const cardHeight = cardSize < 300 ? Math.round(cardSize * 1.18) : cardSize;
 
   return (
     <button
@@ -91,7 +93,7 @@ function TestimonialCard({ position, testimonial, handleMove, cardSize }: Testim
       onClick={() => handleMove(position)}
       aria-label={`Tampilkan testimoni dari ${name}`}
       className={cn(
-        "stagger-card absolute left-1/2 top-1/2 cursor-pointer border-2 p-6 text-left transition-all duration-500 ease-in-out sm:p-8",
+        "stagger-card absolute left-1/2 top-1/2 flex cursor-pointer flex-col border-2 p-5 text-left transition-all duration-500 ease-in-out sm:p-8",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
         isCenter
           ? "z-10 border-primary bg-primary text-white"
@@ -99,39 +101,56 @@ function TestimonialCard({ position, testimonial, handleMove, cardSize }: Testim
       )}
       style={{
         width: cardSize,
-        height: cardSize,
+        height: cardHeight,
         clipPath: "polygon(36px 0%, calc(100% - 36px) 0%, 100% 36px, 100% 100%, calc(100% - 36px) 100%, 36px 100%, 0 100%, 0 0)",
         transform: `translate(-50%, -50%) translateX(${(cardSize / 1.5) * position}px) translateY(${isCenter ? -65 : position % 2 ? 15 : -15}px) rotate(${isCenter ? 0 : position % 2 ? 2.5 : -2.5}deg)`,
         boxShadow: isCenter ? "0 8px 0 4px color-mix(in srgb, var(--color-border) 90%, transparent)" : undefined,
       }}
     >
       <span aria-hidden className="absolute right-0 top-9 block h-0.5 w-[71px] origin-top-right rotate-45 bg-border" />
-      {testimonial.imgSrc ? (
-        <Image
-          src={testimonial.imgSrc}
-          alt=""
-          width={48}
-          height={56}
-          className="mb-4 h-14 w-12 bg-muted object-cover object-top"
-          style={{ boxShadow: "3px 3px 0 var(--color-background)" }}
-        />
-      ) : (
-        <span
-          aria-hidden
-          className={cn(
-            "mb-4 flex h-14 w-12 items-center justify-center font-display text-base font-bold",
-            isCenter ? "bg-white/20 text-white" : "bg-primary/10 text-primary",
+
+      {/* Header: portrait + name/role side by side, so the author never collides with the quote. */}
+      <span className="flex items-center gap-3 pr-10">
+        {testimonial.imgSrc ? (
+          <Image
+            src={testimonial.imgSrc}
+            alt=""
+            width={48}
+            height={56}
+            className="h-12 w-10 shrink-0 bg-muted object-cover object-top sm:h-14 sm:w-12"
+            style={{ boxShadow: "3px 3px 0 var(--color-background)" }}
+          />
+        ) : (
+          <span
+            aria-hidden
+            className={cn(
+              "flex h-12 w-10 shrink-0 items-center justify-center font-display text-sm font-bold sm:h-14 sm:w-12 sm:text-base",
+              isCenter ? "bg-white/20 text-white" : "bg-primary/10 text-primary",
+            )}
+            style={{ boxShadow: "3px 3px 0 var(--color-background)" }}
+          >
+            {monogram}
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className={cn("block truncate text-sm font-bold not-italic", isCenter ? "text-white" : "text-foreground")}>
+            {name}
+          </span>
+          {role && (
+            <span className={cn("block truncate text-xs", isCenter ? "text-white/75" : "text-muted")}>
+              {role}
+            </span>
           )}
-          style={{ boxShadow: "3px 3px 0 var(--color-background)" }}
-        >
-          {monogram}
         </span>
-      )}
-      <span className={cn("block text-base font-medium sm:text-xl", isCenter ? "text-white" : "text-foreground")}>
-        “{testimonial.testimonial}”
       </span>
-      <span className={cn("absolute bottom-6 left-6 right-6 mt-2 text-sm italic sm:bottom-8 sm:left-8 sm:right-8", isCenter ? "text-white/80" : "text-muted")}>
-        — {testimonial.by}
+
+      <span
+        className={cn(
+          "mt-4 block text-[15px] font-medium leading-relaxed sm:mt-5 sm:text-xl sm:leading-snug",
+          isCenter ? "text-white" : "text-foreground",
+        )}
+      >
+        “{testimonial.testimonial}”
       </span>
     </button>
   );
